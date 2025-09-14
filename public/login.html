@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>登录 - 想法日记</title>
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        .login-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        
+        .login-card {
+            background: white;
+            padding: 2rem;
+            border-radius: 12px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            max-width: 400px;
+            text-align: center;
+        }
+        
+        .login-title {
+            font-size: 1.8rem;
+            font-weight: 600;
+            color: #2c3e50;
+            margin-bottom: 0.5rem;
+        }
+        
+        .login-subtitle {
+            color: #7f8c8d;
+            margin-bottom: 2rem;
+        }
+        
+        .login-form {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+        
+        .password-input {
+            padding: 0.75rem;
+            border: 2px solid #e1e8ed;
+            border-radius: 8px;
+            font-size: 1rem;
+            transition: border-color 0.3s ease;
+        }
+        
+        .password-input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .login-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 0.75rem;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: opacity 0.3s ease;
+        }
+        
+        .login-btn:hover {
+            opacity: 0.9;
+        }
+        
+        .login-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        
+        .error-message {
+            color: #e74c3c;
+            margin-top: 1rem;
+            padding: 0.5rem;
+            background: #ffeaea;
+            border-radius: 6px;
+            font-size: 0.9rem;
+        }
+        
+        .lock-icon {
+            font-size: 3rem;
+            color: #667eea;
+            margin-bottom: 1rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <div class="login-card">
+            <div class="lock-icon">🔐</div>
+            <h1 class="login-title">访问验证</h1>
+            <p class="login-subtitle">请输入密码访问想法日记</p>
+            
+            <form class="login-form" id="loginForm">
+                <input 
+                    type="password" 
+                    class="password-input" 
+                    id="passwordInput" 
+                    placeholder="请输入访问密码"
+                    required
+                    autocomplete="current-password"
+                >
+                <button type="submit" class="login-btn" id="loginBtn">
+                    <span class="login-text">进入日记</span>
+                    <span class="login-loading" style="display: none;">验证中...</span>
+                </button>
+            </form>
+            
+            <div class="error-message" id="errorMessage" style="display: none;"></div>
+        </div>
+    </div>
+
+    <script>
+        class LoginPage {
+            constructor() {
+                this.form = document.getElementById('loginForm');
+                this.passwordInput = document.getElementById('passwordInput');
+                this.loginBtn = document.getElementById('loginBtn');
+                this.loginText = this.loginBtn.querySelector('.login-text');
+                this.loginLoading = this.loginBtn.querySelector('.login-loading');
+                this.errorMessage = document.getElementById('errorMessage');
+                
+                this.bindEvents();
+                this.checkAuthStatus();
+            }
+            
+            bindEvents() {
+                this.form.addEventListener('submit', (e) => this.handleLogin(e));
+                this.passwordInput.addEventListener('input', () => this.clearError());
+            }
+            
+            async checkAuthStatus() {
+                try {
+                    const response = await fetch('/api/auth/status', {
+                        credentials: 'include'
+                    });
+                    const data = await response.json();
+                    
+                    if (data.authenticated) {
+                        window.location.href = '/';
+                    }
+                    
+                    if (!data.hasPassword) {
+                        this.showError('未设置访问密码，请联系管理员配置 AUTH_PASSWORD 环境变量');
+                    }
+                } catch (error) {
+                    console.error('Auth status check failed:', error);
+                }
+            }
+            
+            async handleLogin(e) {
+                e.preventDefault();
+                
+                const password = this.passwordInput.value.trim();
+                if (!password) {
+                    this.showError('请输入密码');
+                    return;
+                }
+                
+                this.setLoading(true);
+                this.clearError();
+                
+                try {
+                    const response = await fetch('/api/auth/login', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        credentials: 'include',
+                        body: JSON.stringify({ password }),
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (response.ok) {
+                        // 登录成功，跳转到主页
+                        window.location.href = '/';
+                    } else {
+                        this.showError(data.error || '登录失败');
+                    }
+                } catch (error) {
+                    console.error('Login error:', error);
+                    this.showError('网络错误，请稍后重试');
+                } finally {
+                    this.setLoading(false);
+                }
+            }
+            
+            setLoading(isLoading) {
+                this.loginBtn.disabled = isLoading;
+                if (isLoading) {
+                    this.loginText.style.display = 'none';
+                    this.loginLoading.style.display = 'inline';
+                } else {
+                    this.loginText.style.display = 'inline';
+                    this.loginLoading.style.display = 'none';
+                }
+            }
+            
+            showError(message) {
+                this.errorMessage.textContent = message;
+                this.errorMessage.style.display = 'block';
+            }
+            
+            clearError() {
+                this.errorMessage.style.display = 'none';
+            }
+        }
+        
+        // 初始化登录页面
+        new LoginPage();
+    </script>
+</body>
+</html> 
