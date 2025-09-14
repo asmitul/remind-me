@@ -90,8 +90,8 @@ jobs:
         port: ${{ secrets.PORT || 22 }}
         script: |
           # 创建项目目录（如果不存在）
-          mkdir -p ~/tweetdiary2
-          cd ~/tweetdiary2
+          mkdir -p ~/remind-me
+          cd ~/remind-me
           
           # 登录到 GitHub Container Registry
           echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
