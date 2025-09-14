@@ -1513,14 +1513,107 @@ app.get('/health', (req, res) => {
   res.json({ status: 'OK', timestamp: new Date().toISOString() });
 });
 
+// 初始化育儿提醒应用工作表
+async function initializeReminderSheets() {
+  try {
+    const sheets = await getGoogleSheetsInstance();
+    const response = await sheets.spreadsheets.get({
+      spreadsheetId: SPREADSHEET_ID,
+    });
+
+    const existingSheets = response.data.sheets.map(sheet => sheet.properties.title);
+    const requiredSheets = [CHILDREN_SHEET_NAME, REMINDERS_SHEET_NAME, RECORDS_SHEET_NAME, CATEGORIES_SHEET_NAME];
+    const requests = [];
+
+    // 检查并创建缺失的工作表
+    for (const sheetName of requiredSheets) {
+      if (!existingSheets.includes(sheetName)) {
+        requests.push({
+          addSheet: {
+            properties: {
+              title: sheetName,
+              gridProperties: { rowCount: 1000, columnCount: 20 }
+            }
+          }
+        });
+        console.log(`Will create sheet: ${sheetName}`);
+      }
+    }
+
+    // 批量创建工作表
+    if (requests.length > 0) {
+      await sheets.spreadsheets.batchUpdate({
+        spreadsheetId: SPREADSHEET_ID,
+        resource: { requests }
+      });
+      console.log('Created missing sheets');
+
+      // 初始化表头和默认数据
+      const sheetConfigs = [
+        {
+          name: CHILDREN_SHEET_NAME,
+          headers: [['ID', '姓名', '年龄', '生日', '头像', '创建时间', '更新时间', '状态']],
+          data: []
+        },
+        {
+          name: REMINDERS_SHEET_NAME,
+          headers: [['ID', '孩子ID', '标题', '描述', '分类', '提醒类型', '提醒时间', '重复规则', '提前提醒(分钟)', '启用状态', '创建时间', '更新时间']],
+          data: []
+        },
+        {
+          name: RECORDS_SHEET_NAME,
+          headers: [['ID', '提醒ID', '孩子ID', '计划时间', '完成时间', '状态', '备注', '操作人', '创建时间']],
+          data: []
+        },
+        {
+          name: CATEGORIES_SHEET_NAME,
+          headers: [['ID', '分类名称', '图标', '颜色', '排序', '描述', '创建时间']],
+          data: [
+            ['1', '喝水', '💧', '#4FC3F7', '1', '定时提醒喝水', new Date().toISOString()],
+            ['2', '维他命', '💊', '#66BB6A', '2', '维他命和营养补充剂', new Date().toISOString()],
+            ['3', '刷牙', '🦷', '#FF7043', '3', '口腔卫生护理', new Date().toISOString()],
+            ['4', '午睡', '😴', '#9575CD', '4', '休息和睡眠', new Date().toISOString()],
+            ['5', '运动', '🏃', '#FFB74D', '5', '体育锻炼活动', new Date().toISOString()],
+            ['6', '补铁剂', '🩸', '#F06292', '6', '铁剂补充', new Date().toISOString()],
+            ['7', '吃药', '💉', '#EF5350', '7', '药物服用提醒', new Date().toISOString()],
+            ['8', '作业', '📚', '#5C6BC0', '8', '学习任务提醒', new Date().toISOString()],
+            ['9', '其他', '📌', '#78909C', '9', '其他提醒事项', new Date().toISOString()]
+          ]
+        }
+      ];
+
+      // 写入表头和数据
+      for (const config of sheetConfigs) {
+        const values = [...config.headers, ...config.data];
+        if (values.length > 0) {
+          await sheets.spreadsheets.values.update({
+            spreadsheetId: SPREADSHEET_ID,
+            range: `${config.name}!A1`,
+            valueInputOption: 'RAW',
+            resource: { values }
+          });
+          console.log(`Initialized ${config.name} with headers and data`);
+        }
+      }
+    }
+
+    console.log('Reminder sheets initialization completed');
+  } catch (error) {
+    console.error('Error initializing reminder sheets:', error);
+  }
+}
+
 // 启动服务器
 async function startServer() {
   try {
     // 初始化工作表信息
     await initializeSheetInfo();
-    
+
     // 初始化存档工作表
     await initializeArchiveSheet();
+
+    // 初始化育儿提醒应用工作表
+    await initializeReminderSheets();
     
     app.listen(PORT, () => {
       console.log(`Server is running on port ${PORT}`);
